@@ -87,7 +87,7 @@ const Footer = () => {
                   fill="none"
                 />
               </svg>
-              <span className="footer-logo-text">Coursenix</span>
+              <span className="footer-logo-text">oursenix</span>
             </div>
             <p className="footer-desc">
               Turn any topic into a structured, ready-to-teach course — generated instantly by AI.
@@ -98,17 +98,45 @@ const Footer = () => {
             <div className="footer-col">
               <h4>Product</h4>
               <ul>
+                <li><Link href="/features">Features</Link></li>
                 <li><Link href="/how-it-works">How it works</Link></li>
                 <li><Link href="/courses">Courses</Link></li>
                 <li><Link href="/pricing">Pricing</Link></li>
+                <li><Link href="/templates">Templates</Link></li>
+                <li><Link href="/integrations">Integrations</Link></li>
+                <li><Link href="/changelog">Changelog</Link></li>
+              </ul>
+            </div>
+            <div className="footer-col">
+              <h4>Solutions</h4>
+              <ul>
+                <li><Link href="/use-cases">Use Cases</Link></li>
+                <li><Link href="/enterprise">Enterprise</Link></li>
+                <li><Link href="/compare">Compare</Link></li>
+                <li><Link href="/affiliates">Affiliates</Link></li>
               </ul>
             </div>
             <div className="footer-col">
               <h4>Company</h4>
               <ul>
                 <li><Link href="/about">About</Link></li>
-                <li><Link href="/blog">Blog</Link></li>
                 <li><Link href="/careers">Careers</Link></li>
+                <li><Link href="/testimonials">Testimonials</Link></li>
+                <li><Link href="/contact">Contact</Link></li>
+                <li><Link href="/faq">FAQ</Link></li>
+
+
+              </ul>
+            </div>
+            < div className="footer-col">
+              <h4>Resources</h4>
+              <ul>
+                <li><Link href="/blog">Blog</Link></li>
+                <li><Link href="/help">Help Center</Link></li>
+                <li><Link href="/case-studies">Case Studies</Link></li>
+                <li><Link href="/community">Community</Link></li>
+                <li><Link href="/security">Security</Link></li>
+                <li><Link href="/Demo">Demo</Link></li>
               </ul>
             </div>
             <div className="footer-col">
@@ -116,7 +144,6 @@ const Footer = () => {
               <ul>
                 <li><Link href="/privacy">Privacy</Link></li>
                 <li><Link href="/terms">Terms</Link></li>
-                <li><Link href="/career"></Link></li>
               </ul>
             </div>
           </div>

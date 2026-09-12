@@ -48,7 +48,7 @@ const Navbar: React.FC = () => {
           />
         </svg>
         <span className="text-2xl font-bold tracking-tight text-[#2dd4a7] group-hover:opacity-90 transition">
-          oursenix
+          oursenixAI
         </span>
       </Link>
 
@@ -65,8 +65,8 @@ const Navbar: React.FC = () => {
           </Link>
         </li>
         <li>
-          <Link href="/pricing" className="hover:text-white transition-colors">
-            Pricing
+          <Link href="/Resources" className="hover:text-white transition-colors">
+            Resources
           </Link>
         </li>
         <li>
@@ -74,11 +74,7 @@ const Navbar: React.FC = () => {
             About
           </Link>
         </li>
-        <li>
-          <Link href="/blog" className="hover:text-white transition-colors">
-            Blog
-          </Link>
-        </li>
+
       </ul>
 
       {/* Auth Buttons */}

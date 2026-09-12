@@ -11,10 +11,19 @@ const headers = {
   Authorization: `Bearer ${ANON_KEY}`,
 };
 
+
+// Helper: throws if no logged-in user (every write needs an owner)
+async function getCurrentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    throw new Error('Unauthorized: no active session');
+  }
+  return data.user.id;
+}
+
 // 1. List Courses (Direct Supabase with Edge Function fallback)
 export async function listCourses(filters: { status?: string } = {}): Promise<Course[]> {
   try {
-    // Try Direct Supabase Database first
     const query = supabase.from('courses').select('*').order('id', { ascending: false });
     if (filters.status) query.eq('status', filters.status);
     const { data, error } = await query;
@@ -23,117 +32,74 @@ export async function listCourses(filters: { status?: string } = {}): Promise<Co
       return data as Course[];
     }
 
-    // Try Edge Function fallback
-    const params = new URLSearchParams();
-    if (filters.status) params.append('status', filters.status);
-    const res = await fetch(`${EDGE_FUNCTION_URL}?${params.toString()}`, { headers });
-    if (res.ok) {
-      const edgeData = await res.json();
-      if (Array.isArray(edgeData) && edgeData.length > 0) return edgeData as Course[];
+    // Only fall back to Edge Function on a genuine failure, not just "0 rows"
+    if (error) {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      const res = await fetch(`${EDGE_FUNCTION_URL}?${params.toString()}`, { headers });
+      if (res.ok) {
+        const edgeData = await res.json();
+        if (Array.isArray(edgeData)) return edgeData as Course[];
+      }
     }
-  } catch (err: unknown) {
-    console.warn('Supabase fetch failed, returning initial courses:', err);
-  }
 
-  // Fallback initial sample courses if DB is empty or connecting
-  return [
-    {
-      id: 1,
-      title: 'Deep Learning & Neural Networks Fundamentals',
-      description: 'Master backpropagation, CNNs, Transformers, and PyTorch from raw mathematical foundations to production models.',
-      category: 'AI & Machine Learning',
-      duration: '8h 30m',
-      level: 'intermediate',
-    },
-    {
-      id: 2,
-      title: 'Full-Stack Next.js 16 with Supabase & Edge Functions',
-      description: 'Build enterprise-grade SaaS platforms with React Server Components, server actions, PostgreSQL, and OAuth authentication.',
-      category: 'Web Development',
-      duration: '12h 15m',
-      level: 'advanced',
-    },
-    {
-      id: 3,
-      title: 'Prompt Engineering & LLM Application Architecture',
-      description: 'Learn systemic prompt design, structured JSON outputs, RAG pipelines, and multi-agent workflows with Gemini & Claude.',
-      category: 'AI Engineering',
-      duration: '5h 45m',
-      level: 'beginner',
-    },
-  ];
+    return data ? (data as Course[]) : [];
+  } catch (err: unknown) {
+    console.warn('Supabase fetch failed:', err);
+    return [];
+  }
 }
 
-// 2. Create Course
+// 2. Create Course — user_id is now always attached to the logged-in user
 export async function createCourse(course: Partial<Course>): Promise<Course> {
-  try {
-    // Try direct Supabase insert
-    const { data, error } = await supabase.from('courses').insert([course]).select();
-    if (!error && data && data[0]) {
-      return data[0] as Course;
-    }
-  } catch {
-    // Fallback to Edge Function
-  }
+  const userId = await getCurrentUserId();
+  const payload = { ...course, user_id: userId };
 
-  const res = await fetch(EDGE_FUNCTION_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(course),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to create course');
-  return Array.isArray(data) ? data[0] : data;
+  const { data, error } = await supabase.from('courses').insert([payload]).select();
+
+  if (error) {
+    throw new Error(error.message || 'Failed to create course');
+  }
+  if (!data || data.length === 0) {
+    // RLS silently rejected the insert (e.g. spoofed user_id)
+    throw new Error('Unauthorized: could not create course');
+  }
+  return data[0] as Course;
 }
 
 // 3. Get Single Course
 export async function getCourse(id: string | number): Promise<Course> {
-  try {
-    const { data, error } = await supabase.from('courses').select('*').eq('id', id).single();
-    if (!error && data) return data as Course;
-  } catch {
-    // Fallback
+  const { data, error } = await supabase.from('courses').select('*').eq('id', id).single();
+  if (error) {
+    throw new Error(error.message || 'Course not found or access denied');
   }
-
-  const res = await fetch(`${EDGE_FUNCTION_URL}?id=${id}`, { headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to fetch course');
-  return Array.isArray(data) ? data[0] : data;
+  return data as Course;
 }
 
-// 4. Update Course
+// 4. Update Course — detects RLS-blocked updates instead of reporting false success
 export async function updateCourse(id: string | number, updates: Partial<Course>): Promise<Course> {
-  try {
-    const { data, error } = await supabase.from('courses').update(updates).eq('id', id).select();
-    if (!error && data && data[0]) return data[0] as Course;
-  } catch {
-    // Fallback
-  }
+  const { data, error } = await supabase.from('courses').update(updates).eq('id', id).select();
 
-  const res = await fetch(`${EDGE_FUNCTION_URL}?id=${id}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to update course');
-  return Array.isArray(data) ? data[0] : data;
+  if (error) {
+    throw new Error(error.message || 'Failed to update course');
+  }
+  if (!data || data.length === 0) {
+    // Row exists but RLS blocked it (not owner, not admin) — or row doesn't exist.
+    throw new Error('Unauthorized: you do not have permission to update this course');
+  }
+  return data[0] as Course;
 }
 
-// 5. Delete Course
+// 5. Delete Course — detects RLS-blocked deletes instead of reporting false success
 export async function deleteCourse(id: string | number): Promise<{ success: boolean }> {
-  try {
-    const { error } = await supabase.from('courses').delete().eq('id', id);
-    if (!error) return { success: true };
-  } catch {
-    // Fallback
-  }
+  const { data, error } = await supabase.from('courses').delete().eq('id', id).select();
 
-  const res = await fetch(`${EDGE_FUNCTION_URL}?id=${id}`, {
-    method: 'DELETE',
-    headers,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Failed to delete course');
+  if (error) {
+    throw new Error(error.message || 'Failed to delete course');
+  }
+  if (!data || data.length === 0) {
+    // Nothing was actually deleted — either row doesn't exist or RLS blocked it
+    throw new Error('Unauthorized: you do not have permission to delete this course');
+  }
   return { success: true };
 }
